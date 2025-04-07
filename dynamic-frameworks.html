@@ -1,0 +1,229 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dynamically Loading Frameworks to Support Multiple iOS Versions in the Same Bundle — Christian Privitelli</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/default.min.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/swift.min.js"></script>
+</head>
+
+<body>
+    <div class="header">
+        <a href="index.html">home</a>
+    </div>
+
+    <div class="content">
+        <h1>Dynamically Loading Frameworks to Support Multiple iOS Versions in the Same Bundle</h1>
+
+        <p>If you’ve been an Apple platforms developer for a while now, there’s probably been a time when you’ve debated
+            raising the minimum version requirement of your app so you have access to new APIs.</p>
+
+        <p>A few days ago I was in that situation. We’re lucky on Apple platforms that most users update to the latest OS
+            releases very quickly—but I remembered that I promised users of my app <strong><a href="https://quantavinyl.app">Quanta</a></strong> that I would
+            always keep the minimum requirement at iOS 15. 15 was released 4 years ago now though, and it’s time to move
+            forward. While conditionally available APIs can work, they often clutter your codebase and can become difficult
+            to manage as complexity grows. What should I do?</p>
+
+        <p>Well… dynamic frameworks was my answer, and it’s pretty simple to get working. I couldn’t find many people using
+            them for this purpose which I found a bit odd, so that’s why I’m writing this. This dynamic loading approach
+            allows you to seamlessly experiment with newer APIs without leaving behind users on older OS versions, and keeps
+            your codebase clean and separated.</p>
+
+        <p>My goal was pretty simple: Allow users on iOS 15-16 to use the current version of my app while developing modern
+            features for users on iOS 17-18.</p>
+
+        <h2>Separating Out Crucial Shared Logic</h2>
+
+        <p>You’ll probably have some shared extensions, utilities, assets and resources, API representations, etc that you
+            want to be shared between the legacy and modern version of your app.</p>
+
+        <p>Create a new framework under your app target and name it something like “Shared”. Make sure <em>Embed in
+                Application</em> is set to your app target.</p>
+
+        <img src="assets/dynamic-frameworks/img1.jpg">
+        <img src="assets/dynamic-frameworks/img2.jpg">
+
+        <p>Now move over your <code>Assets.xcassets</code>, any resources, and all your shared logic into this framework.
+            You’ll need to make sure everything you want exposed is public, which may take some time. Approach this with a
+            decent level of patience—it’s gonna get a little tedious.</p>
+
+        <h2>Creating the Legacy and Modern Code Base</h2>
+
+        <p>Now that you’ve split out your shared logic, you’ll want to create two more frameworks—or however many you want
+            for the different versions you want to support. Make sure when creating these, that you set <em>Embed in
+                Application</em> to <strong>None</strong>! If we don’t do this, Xcode will attempt to statically link the
+            framework incompatible with your minimum deployment target and result in a crash.</p>
+
+        <img src="assets/dynamic-frameworks/img3.jpg">
+
+        <p>Now:</p>
+        <ul>
+            <li>Set your main app target's minimum version to the minimum version the entire bundle will support. In my
+                case, iOS 15.</li>
+            <li>Set your modern framework to the new version you want to continue development with. In my case, iOS 17.</li>
+            <li>Set your legacy framework to the same minimum version as the minimum app target version.</li>
+        </ul>
+
+        <p>Because we set <em>Embed in Application</em> to None, the frameworks won’t be included in your bundle whatsoever.
+            Add them under your main target in <strong>Build Phases</strong> and then <strong>Target Dependencies</strong>
+            and <strong>Copy Bundle Resources</strong>. Adding your frameworks under target dependencies will make sure they
+            are built in the same build process as your main target, but won’t explicitly link them. This is what we want.
+            Adding them under copy bundle resources will copy the <code>.framework</code> file to your main bundle where we
+            can load them dynamically at runtime.</p>
+
+        <img src="assets/dynamic-frameworks/img4.jpg">
+
+        <p>Also make sure to add your "Shared" framework under <strong>General > Frameworks and Libraries</strong> for each of your frameworks.</p>
+
+        <h2>Loading the Correct Framework Depending on the User's Actual iOS Version at Runtime</h2>
+
+        <p>This is where it gets fun! At this point your main app should literally just be the entry point for your
+            application. In my case I’m using the SwiftUI app lifecycle since it’s the most simple for this example, but it
+            really doesn’t make a difference.</p>
+
+        <p>We’re going to first need to make a main bootstrap class within each of your frameworks to dynamically load the
+            correct one for the user's iOS version. The bootstrap class acts as the entry point within each dynamic
+            framework, responsible for initializing your app-specific content or view.</p>
+
+        <p>Create a <code>main.swift</code> file within each framework and create a class that has a function that will
+            return a root point of each one of your apps. Really, here you should be thinking about each one of these
+            frameworks as a separate application. The main target is just going to choose which one to load at runtime.</p>
+
+        <p>We need to return a type-erased <code>AnyView</code> in the case that the root of your app is SwiftUI. Otherwise,
+            it could be a <code>UIViewController</code>, or whatever you want your root to be.</p>
+
+        <img src="assets/dynamic-frameworks/img5.jpg">
+
+        <pre><code>import SwiftUI
+
+@objc public class main: NSObject {
+    @objc public static func loadMainContent() -> Any {
+        return AnyView(RootView())
+    }
+}
+
+private struct RootView: View {
+    var body: some View {
+        Text("This is the modern framework!")
+    }
+}</code></pre>
+
+        <p>In the root of your application we can finally load the framework with the magic of <code>dlopen</code> and
+            Objective-C runtime utilities!</p>
+
+        <p>Your frameworks may be in one of the following locations, seemingly depending on whether you’re running on device
+            or in simulator. We try to load from the first and then the second if that fails.</p>
+
+        <p>Note how we change the framework name depending on your iOS version. After <code>dlopen</code>-ing the correct
+            framework, we need to fetch the main content from the bootstrap we created. We use
+            <code>NSClassFromString</code> to get the main class (make sure you prefix with the framework name here), and
+            <code>NSSelectorFromString</code> to get the <code>loadMainContent</code> method. Now it’s as simple as calling
+            it, taking the return value as <code>AnyView</code> and returning it.</p>
+
+        <pre><code>import SwiftUI
+
+func loadMainContent() -> AnyView {
+    var frameworkName = "MultiVersionLegacy"
+    
+    if #available(iOS 17, *) {
+        frameworkName = "MultiVersionModern"
+    }
+    
+    // potential framework location 1
+    var frameworkPath = Bundle.main.bundleURL
+        .appendingPathComponent("\(frameworkName).framework")
+        .appendingPathComponent(frameworkName)
+        .path
+    
+    if dlopen(frameworkPath, RTLD_NOW) == nil {
+        // potential framework location 2
+        frameworkPath = URL(fileURLWithPath: Bundle.main.privateFrameworksPath!)
+            .appendingPathComponent("\(frameworkName).framework")
+            .appendingPathComponent(frameworkName)
+            .path
+        
+        dlopen(frameworkPath, RTLD_NOW)
+        
+        if let error = dlerror() {
+            print("dlopen error: \(String(cString: error))")
+        }
+    }
+    
+    let bootstrapClass = NSClassFromString("\(frameworkName).main") as! NSObject.Type
+    let selector = NSSelectorFromString("loadMainContent")
+    bootstrapClass.responds(to: selector)
+
+    return bootstrapClass.perform(selector).takeUnretainedValue() as! AnyView
+}
+
+@main
+struct MultiVersionApp: App {
+    var body: some Scene {
+        WindowGroup {
+            loadMainContent()
+        }
+    }
+}</code></pre>
+
+        <img src="assets/dynamic-frameworks/img6.jpg">
+
+        <p>Done! Now you’ll need to duplicate some code across your legacy and modern frameworks to get the app to the
+            current state, but when you want to add new features—just use the modern framework with access to all the new
+            APIs. Try to separate out as much critical logic as possible into your shared framework, or create more
+            frameworks to separate out different parts of your app. Where you go from here is up to you! You could even use
+            this to load a different version of your app depending on if the user is on iPad or iPhone. It’s probably not
+            recommended, but technically you can load these frameworks based on any given property you can access at
+            runtime.</p>
+    </div>
+</body>
+
+<style>
+    body {
+        font-family: "Helvetica Neue", sans-serif;
+        line-height: 1.5;
+    }
+
+    .content {
+        max-width: 800px;
+        margin: 0 auto;
+        padding: 2% 10% 10% 10%;
+    }
+
+    h1, h2 {
+        color: #1c1c1c;
+    }
+
+    ul {
+        list-style: disc;
+        margin-left: 8px;
+    }
+
+    code {
+        background-color: #f4f4f4;
+        padding: 2px 4px;
+        border-radius: 4px;
+        font-family: ui-monospace, "Courier New", monospace;
+        font-size: 15px;
+    }
+
+    pre {
+        background-color: #f4f4f4;
+        padding: 12px;
+        margin: 12px;
+        border-radius: 6px;
+        font-family: ui-monospace, "Courier New", monospace;
+        font-size: 15px;
+    }
+
+    img {
+        max-width: 100%;
+        max-height: 100%;
+    }
+</style>
+
+<script>hljs.highlightAll();</script>
+
+</html>
