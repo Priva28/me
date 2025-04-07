@@ -5,7 +5,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Dynamically Loading Frameworks to Support Multiple iOS Versions in the Same Bundle — Christian Privitelli</title>
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/default.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/xcode.min.css">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/swift.min.js"></script>
 </head>
@@ -184,7 +184,7 @@ struct MultiVersionApp: App {
 
         <ul>
             <li>If you take your xcassets folder out of your main app, and into the shared framework like I did, you'll miss
-                 out on the auto-generated ImageResource representations because Apples version creates them as internal to the 
+                 out on the auto-generated ImageResource representations because Apple's version creates them as internal to the 
                  current module. I have a manual solution for this being a script that runs as a build phase and essentially 
                  replicates the functionality but makes them public. Will share this soon.</li>
             <li>If you're using Swift Packages, make sure to only link your packages to the shared framework, and the dependencies
@@ -220,7 +220,7 @@ struct MultiVersionApp: App {
     }
 
     code {
-        background-color: #f4f4f4;
+        background-color: #f4f4f4 !important;
         padding: 2px 4px;
         border-radius: 4px;
         font-family: ui-monospace, "Courier New", monospace;
@@ -228,7 +228,7 @@ struct MultiVersionApp: App {
     }
 
     pre {
-        background-color: #f4f4f4;
+        background-color: #f4f4f4 !important;
         padding: 12px;
         margin: 12px;
         border-radius: 6px;
