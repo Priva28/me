@@ -46,9 +46,11 @@
         <img src="assets/dynamic-frameworks/img1.jpg">
         <img src="assets/dynamic-frameworks/img2.jpg">
 
-        <p>Now move over your <code>Assets.xcassets</code>, any resources, and all your shared logic into this framework.
-            You’ll need to make sure everything you want exposed is public, which may take some time. Approach this with a
-            decent level of patience—it’s gonna get a little tedious.</p>
+        <p>Now move over any resources and all your shared logic into this framework.
+            You’ll need to make sure everything you want exposed is public, which may take some time. 
+            Approach this with a decent level of patience—it’s gonna get a little tedious. 
+            You might choose to keep your xcassets inside your main application still so that you don’t have to 
+            specify the bundle when creating images.</p>
 
         <h2>Creating the Legacy and Modern Code Base</h2>
 
@@ -69,14 +71,15 @@
 
         <p>Because we set <em>Embed in Application</em> to None, the frameworks won’t be included in your bundle whatsoever.
             Add them under your main target in <strong>Build Phases</strong> and then <strong>Target Dependencies</strong>
-            and <strong>Copy Bundle Resources</strong>. Adding your frameworks under target dependencies will make sure they
+            and <strong>Embed Frameworks</strong>. Adding your frameworks under target dependencies will make sure they
             are built in the same build process as your main target, but won’t explicitly link them. This is what we want.
-            Adding them under copy bundle resources will copy the <code>.framework</code> file to your main bundle where we
-            can load them dynamically at runtime.</p>
+            Adding them under embed frameworks will copy the <code>.framework</code> file to your main bundle where we
+            can load them dynamically at runtime. If you run into issues, ensure Link Binary With Libraries only has your Shared framework(s)!</p>
 
         <img src="assets/dynamic-frameworks/img4.jpg">
 
-        <p>Also make sure to add your "Shared" framework under <strong>General > Frameworks and Libraries</strong> for each of your frameworks.</p>
+        <p>In order for your legacy and modern framework to access your shared code, you’ll need to add your shared frameworks under 
+            General > Frameworks and Libraries. Make sure you set <strong>Do Not Embed</strong> however, since they are already embedded in the main app, and you don’t want to duplicate symbols and resources.</p>
 
         <h2>Loading the Correct Framework Depending on the User's Actual iOS Version at Runtime</h2>
 
